@@ -1048,6 +1048,89 @@ static void scan_devtree_memory(hwNode & core)
   }
 }
 
+void add_platform_dev(string name, string path, hwNode & node)
+{
+  struct dirent **dirlist;
+  string product;
+  int n;
+  hwNode *type_dev;
+
+  product.clear();
+  pushd(path + name);
+
+   /* If the device is a memory dimm, processor, ethernet or usb add it to the respective node */
+  if (name.substr(0, 7) == "ms-dimm" ||
+      name.substr(0, 13) == "usb-connector" ||
+      name.substr(0, 18) == "ethernet-connector" ||
+      name.substr(0, 14) == "ethernet-riser" ||
+      name.substr(0, 9) == "processor" )
+    return;
+
+  replace( name.begin(), name.end(), '@', ':');
+
+  node.addChild(hwNode(name, hw::generic));
+  type_dev = node.getChild(name);
+
+  /* Revert the name to its orginal format to enable correct directory traversal */
+  replace( name.begin(), name.end(), ':', '@');
+
+  if(exists("serial-number"))
+    type_dev->setSerial(get_string("serial-number"));
+
+  product = get_string("part-number");
+  product = product.substr(0, product.size()-1);
+  if(exists("fru-number"))
+    product += " FRU#" + get_string("fru-number");
+
+  if(product != "")
+    type_dev->setProduct(product);
+
+  if(exists("description"))
+    type_dev->setDescription(get_string("description"));
+  if(exists("ibm,loc-code"))
+    type_dev->setSlot(get_string("ibm,loc-code"));
+
+  type_dev->claim(true);
+
+  n = scandir(".", &dirlist, selectdir, alphasort);
+  popd();
+
+  if (n < 0)
+    return;
+
+  for (int j = 0; j < n; j++)
+  {
+    add_platform_dev(dirlist[j]->d_name, path + name + "/", *type_dev);
+    free(dirlist[j]);
+  }
+  free(dirlist);
+}
+
+/*
+ * Gathers all powerpc specific device tree information
+ * For example, backplane, anchor-card, etc and other devices
+ * are listed with their location-number, part-number,etc.
+ */
+static void scan_devtree_platform_powernv(hwNode & core)
+{
+  struct dirent **namelist;
+  int n;
+  string path = DEVICETREEVPD;
+
+  pushd(DEVICETREEVPD);
+  n = scandir(".", &namelist, selectdir, alphasort);
+  popd();
+
+  if (n < 0)
+    return;
+
+  for (int i = 0; i < n; i++) {
+    add_platform_dev(namelist[i]->d_name, path, core);
+    free(namelist[i]);
+  }
+
+  free(namelist);
+}
 
 struct pmac_mb_def
 {
@@ -1196,6 +1279,7 @@ bool scan_device_tree(hwNode & n)
       scan_devtree_memory_powernv(*core);
       scan_devtree_storage_powernv(*core);
       scan_devtree_network_powernv(*core);
+      scan_devtree_platform_powernv(*core);
       n.addCapability("powernv", "Non-virtualized");
       n.addCapability("opal", "OPAL firmware");
     }
