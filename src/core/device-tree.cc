@@ -662,6 +662,78 @@ static void scan_devtree_cpu_power(hwNode & core)
     delete it->second;
 }
 
+void add_usb(string name, string path, hwNode & core)
+{
+  struct dirent **dirlist;
+  string product;
+  int n;
+
+  pushd(path + name);
+  if(name.substr(0, 13) == "usb-connector")
+  {
+    hwNode *storage = core.getChild("storage");
+
+    hwNode usb("usb", hw::storage);
+    usb.claim(true);
+
+    if(!storage)
+      storage = core.addChild(hwNode("storage", hw::storage));
+
+    if(exists("serial-number"))
+      usb.setSerial(hw::strip(get_string("serial-number")));
+
+    product = get_string("part-number");
+    product = product.substr(0, product.size()-1);
+    if(exists("fru-number"))
+      product += " FRU#" + get_string("fru-number");
+
+    if(product != "")
+      usb.setProduct(hw::strip(product));
+
+    if(exists("description"))
+      usb.setDescription(hw::strip(get_string("description")));
+    if(exists("ibm,loc-code"))
+      usb.setSlot(hw::strip(get_string("ibm,loc-code")));
+
+    storage->addChild(usb);
+  }
+
+  n = scandir(".", &dirlist, selectdir, alphasort);
+  popd();
+
+  if (n < 0)
+    return;
+
+  for (int i = 0; i < n; i++)
+  {
+    add_usb(dirlist[i]->d_name, path + name + "/", core);
+    free(dirlist[i]);
+  }
+  free(dirlist);
+}
+
+static void scan_devtree_storage_powernv(hwNode & core)
+{
+  struct dirent **namelist;
+  int n;
+  string path = DEVICETREEVPD;
+
+  pushd(DEVICETREEVPD);
+  n = scandir(".", &namelist, selectdir, alphasort);
+  popd();
+
+  if (n < 0)
+    return;
+
+  for (int i = 0; i < n; i++)
+  {
+    add_usb(namelist[i]->d_name, path, core);
+    free(namelist[i]);
+  }
+
+  free(namelist);
+}
+
 void add_memory_bank(string name, string path, hwNode & core)
 {
   struct dirent **dirlist;
@@ -1050,6 +1122,7 @@ bool scan_device_tree(hwNode & n)
       scan_devtree_root(*core);
       scan_devtree_cpu_power(*core);
       scan_devtree_memory_powernv(*core);
+      scan_devtree_storage_powernv(*core);
       n.addCapability("powernv", "Non-virtualized");
       n.addCapability("opal", "OPAL firmware");
     }
