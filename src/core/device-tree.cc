@@ -734,6 +734,78 @@ static void scan_devtree_storage_powernv(hwNode & core)
   free(namelist);
 }
 
+void add_ethernet(string name, string path, hwNode & core)
+{
+  struct dirent **dirlist;
+  string product;
+  int n;
+
+  pushd(path + name);
+  if(name.substr(0, 18) == "ethernet-connector" || name.substr(0, 14) == "ethernet-riser")
+  {
+    hwNode *network = core.getChild("network");
+
+    hwNode ethernet("ethernet", hw::network);
+    ethernet.claim(true);
+
+    if(!network)
+      network = core.addChild(hwNode("network", hw::network));
+
+    if(exists("serial-number"))
+      ethernet.setSerial(hw::strip(get_string("serial-number")));
+
+    product = get_string("part-number");
+    product = product.substr(0, product.size()-1);
+    if(exists("fru-number"))
+      product += " FRU#" + get_string("fru-number");
+
+    if(product != "")
+      ethernet.setProduct(hw::strip(product));
+
+    if(exists("description"))
+      ethernet.setDescription(hw::strip(get_string("description")));
+    if(exists("ibm,loc-code"))
+      ethernet.setSlot(hw::strip(get_string("ibm,loc-code")));
+
+    network->addChild(ethernet);
+  }
+
+  n = scandir(".", &dirlist, selectdir, alphasort);
+  popd();
+
+  if (n < 0)
+    return;
+
+  for (int i = 0; i < n; i++)
+  {
+    add_ethernet(dirlist[i]->d_name, path + name + "/", core);
+    free(dirlist[i]);
+  }
+  free(dirlist);
+}
+
+static void scan_devtree_network_powernv(hwNode & core)
+{
+  struct dirent **namelist;
+  int n;
+  string path = DEVICETREEVPD;
+
+  pushd(DEVICETREEVPD);
+  n = scandir(".", &namelist, selectdir, alphasort);
+  popd();
+
+  if (n < 0)
+    return;
+
+  for (int i = 0; i < n; i++)
+  {
+    add_ethernet(namelist[i]->d_name, path, core);
+    free(namelist[i]);
+  }
+
+  free(namelist);
+}
+
 void add_memory_bank(string name, string path, hwNode & core)
 {
   struct dirent **dirlist;
@@ -1123,6 +1195,7 @@ bool scan_device_tree(hwNode & n)
       scan_devtree_cpu_power(*core);
       scan_devtree_memory_powernv(*core);
       scan_devtree_storage_powernv(*core);
+      scan_devtree_network_powernv(*core);
       n.addCapability("powernv", "Non-virtualized");
       n.addCapability("opal", "OPAL firmware");
     }
