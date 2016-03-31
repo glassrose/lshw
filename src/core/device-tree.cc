@@ -949,8 +949,8 @@ bool scan_device_tree(hwNode & n)
     {
       core->addHint("icon", string("board"));
       scan_devtree_root(*core);
-      scan_devtree_memory_powernv(*core);
       scan_devtree_cpu_power(*core);
+      scan_devtree_memory_powernv(*core);
       n.addCapability("powernv", "Non-virtualized");
       n.addCapability("opal", "OPAL firmware");
     }
@@ -999,8 +999,6 @@ bool scan_device_tree(hwNode & n)
     {
       core->addHint("icon", string("board"));
       scan_devtree_root(*core);
-      scan_devtree_bootrom(*core);
-      scan_devtree_memory(*core);
       if (exists(DEVICETREE "/ibm,lpar-capable"))
       {
         n.setDescription("pSeries LPAR");
@@ -1008,6 +1006,8 @@ bool scan_device_tree(hwNode & n)
       }
       else
         scan_devtree_cpu(*core);
+      scan_devtree_bootrom(*core);
+      scan_devtree_memory(*core);
     }
   }
 
