@@ -28,6 +28,7 @@
 #include <dirent.h>
 #include <utility>
 #include <map>
+#include <sstream>
 
 __ID("@(#) $Id$");
 
@@ -472,6 +473,8 @@ static void scan_devtree_cpu_power(hwNode & core)
     uint32_t version = 0;
     hwNode cpu("cpu",
       hw::processor);
+    stringstream ss;
+    string reg_as_string;
 
     if (exists(basepath + "/device_type") &&
       hw::strip(get_string(basepath + "/device_type")) != "cpu")
@@ -481,6 +484,10 @@ static void scan_devtree_cpu_power(hwNode & core)
     }
 
     set_cpu(cpu, currentcpu++, basepath);
+
+    ss<<get_u32(basepath + "/reg");
+    ss>>reg_as_string;
+    cpu.setPhysId(reg_as_string);
 
     version = get_u32(basepath + "/cpu-version");
     if (version != 0)
