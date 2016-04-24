@@ -66,7 +66,20 @@ const string & version)
 
   while (cpu)
   {
-    cpu->setProduct(name);
+    vector <string> words;
+
+    string prod = cpu->getProduct();
+    int cnt = splitlines(prod, words, ' ');
+    if (cnt>2 &&
+        words[cnt-2].substr(0, 5) == "Part#" &&
+        words[cnt-1].substr(0, 4) == "FRU#")
+    {
+      string cpuvalue = name + " " +words[cnt-2] + " " + words[cnt-1];
+      cpu->setProduct(cpuvalue);
+    }
+    else
+      cpu->setProduct(name);
+
     cpu->setVersion(version);
 
     cpu = getcpu(node, ++currentcpu);
