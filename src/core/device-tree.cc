@@ -345,6 +345,36 @@ static void scan_devtree_cpu(hwNode & core)
 }
 
 
+static void set_cpu_config_threads(hwNode & cpu, const string & basepath)
+{
+  static bool first_cpu_in_system = true;
+  static int threads_per_cpu;
+
+  /* In power systems, there are equal no. of threads per cpu-core */
+  if(first_cpu_in_system)
+  {
+    struct stat sbuf;
+    string p = basepath + string("/ibm,ppc-interrupt-server#s");
+    int rc;
+
+    rc = stat(p.c_str(), &sbuf);
+    if (!rc)
+    {
+      /*
+       * This file contains as many 32 bit interrupt server numbers, as the
+       * number of threads per CPU (in hexadecimal format). st_size gives size
+       * in bytes of a file. Hence, grouping by 4 bytes, we get the thread
+       * count.
+       */
+      threads_per_cpu = sbuf.st_size / 4;
+      first_cpu_in_system = false;
+    }
+  }
+
+  cpu.setConfig("threads", threads_per_cpu);
+}
+
+
 static void scan_devtree_cpu_power(hwNode & core)
 {
   struct dirent **namelist;
@@ -438,6 +468,7 @@ static void scan_devtree_cpu_power(hwNode & core)
   {
     string basepath =
       string(DEVICETREE "/cpus/") + string(namelist[i]->d_name);
+    string nl_cache = "";
     uint32_t version = 0;
     hwNode cpu("cpu",
       hw::processor);
@@ -462,6 +493,8 @@ static void scan_devtree_cpu_power(hwNode & core)
 
     if (hw::strip(get_string(basepath + "/status")) != "okay")
       cpu.disable();
+
+    set_cpu_config_threads(cpu, basepath);
 
     if (exists(basepath + "/d-cache-size"))
     {
@@ -490,12 +523,14 @@ static void scan_devtree_cpu_power(hwNode & core)
         cpu.addChild(cache);
     }
 
-    if (exists(basepath + "/l2-cache") ||
-	exists(basepath + "/next-level-cache"))
+    if (exists(basepath + "/l2-cache"))
+	    nl_cache = "/l2-cache";
+    else if (exists(basepath + "/next-level-cache"))
+	    nl_cache = "/next-level-cache";
+
+    if (nl_cache != "")
     {
-      uint32_t l2_key = get_u32(basepath + "/l2-cache");
-      if (l2_key == 0)
-	      l2_key = get_u32(basepath + "/next-level-cache");
+      uint32_t l2_key = get_u32(basepath + nl_cache);
       map <uint32_t, pair <uint32_t, vector <hwNode> > >::
         const_iterator got = l2_caches.find(l2_key);
 
